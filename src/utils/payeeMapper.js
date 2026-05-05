@@ -28,6 +28,15 @@ async function loadMapping() {
 }
 
 /**
+ * Normalize whitespace in text (multiple spaces to single space)
+ * @param {string} text - Text to normalize
+ * @returns {string}
+ */
+function normalizeWhitespace(text) {
+  return text.replace(/\s+/g, ' ').trim()
+}
+
+/**
  * Extract payee from title or description by matching against known payees
  * @param {string} title - Transaction title
  * @param {string|string[]} description - Transaction description (string or array)
@@ -49,7 +58,7 @@ function extractPayeeFromTransaction(title, description, mapping) {
 
   // First, try to find exact match in title or any description line
   for (const text of allText) {
-    const textLower = text.toLowerCase()
+    const textLower = normalizeWhitespace(text).toLowerCase()
     for (const payee of sortedPayees) {
       if (!payee) continue
       // Look for payee as a whole word (with word boundaries or at start/end)
@@ -63,7 +72,7 @@ function extractPayeeFromTransaction(title, description, mapping) {
   }
 
   // Fallback: substring match (less strict, for partial matches in specific fields)
-  const combinedSearch = allText.join(' ').toLowerCase()
+  const combinedSearch = normalizeWhitespace(allText.join(' ')).toLowerCase()
   for (const payee of sortedPayees) {
     if (payee && combinedSearch.includes(payee.toLowerCase())) {
       return payee
