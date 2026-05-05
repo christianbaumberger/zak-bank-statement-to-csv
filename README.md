@@ -40,13 +40,10 @@ A Node.js tool to convert ZAK bank statements from PDF to CSV format, enabling e
 
 The generated CSV includes the following columns:
 - `date`: Transaction date (YYYY-MM-DD)
-- `time`: Transaction time (HH:MM:SS) if available
 - `title`: Transaction title
 - `description`: Detailed transaction description
-- `valuta`: Value date
 - `incoming`: Incoming amount (if applicable)
 - `outgoing`: Outgoing amount (if applicable)
-- `balance`: Account balance after transaction
 
 ## Technologies Used
 

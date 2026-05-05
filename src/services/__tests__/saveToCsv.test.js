@@ -27,10 +27,10 @@ describe('saveToCsv', () => {
     const csvContent = mockWriteFile.mock.calls[0][1]
     
     // Check headers
-    expect(csvContent).toContain('date,time,title,description,valuta,incoming,outgoing,balance')
-    
+    expect(csvContent).toContain('date,title,description,incoming,outgoing')
+
     // Check data row (with proper CSV escaping)
-    const expectedRow = '"2023-12-31","12:00:00","Test Transaction","Test Description","2023-12-31","100.00","","1000.00"'
+    const expectedRow = '"2023-12-31","Test Transaction","Test Description","100.00",""'
     expect(csvContent).toContain(expectedRow)
   })
 
@@ -42,6 +42,6 @@ describe('saveToCsv', () => {
 
     expect(mockWriteFile).toHaveBeenCalled()
     const csvContent = mockWriteFile.mock.calls[0][1]
-    expect(csvContent).toBe('date,time,title,description,valuta,incoming,outgoing,balance')
+    expect(csvContent).toBe('date,title,description,incoming,outgoing')
   })
 }) 
