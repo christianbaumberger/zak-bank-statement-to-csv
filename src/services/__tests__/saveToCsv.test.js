@@ -18,7 +18,12 @@ describe('saveToCsv', () => {
   })
 
   it('should save transactions to CSV file', async() => {
-    const transactions = [mockTransaction]
+    const transactions = [{
+      ...mockTransaction,
+      payee: 'Test Payee',
+      notes: '',
+      category: 'Test Category'
+    }]
     const outputPath = 'test.csv'
 
     await saveToCsv(transactions, outputPath)
@@ -27,10 +32,10 @@ describe('saveToCsv', () => {
     const csvContent = mockWriteFile.mock.calls[0][1]
     
     // Check headers
-    expect(csvContent).toContain('date,title,description,incoming,outgoing')
+    expect(csvContent).toContain('date,payee,notes,category,incoming,outgoing')
 
     // Check data row (with proper CSV escaping)
-    const expectedRow = '"2023-12-31","Test Transaction","Test Description","100.00",""'
+    const expectedRow = '"2023-12-31","Test Payee","","Test Category","100.00",""'
     expect(csvContent).toContain(expectedRow)
   })
 
@@ -42,6 +47,6 @@ describe('saveToCsv', () => {
 
     expect(mockWriteFile).toHaveBeenCalled()
     const csvContent = mockWriteFile.mock.calls[0][1]
-    expect(csvContent).toBe('date,title,description,incoming,outgoing')
+    expect(csvContent).toBe('date,payee,notes,category,incoming,outgoing')
   })
 }) 

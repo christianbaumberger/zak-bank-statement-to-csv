@@ -2,6 +2,7 @@
 import { logger } from './utils/logger.js'
 import { saveToCsv } from './services/saveToCsv.js'
 import { assembleTransactions } from './services/assembleTransactions.js'
+import { enrichTransactions } from './utils/payeeMapper.js'
 import { config } from './config/config.js'
 
 async function initialize(inputDir, outputPath) {
@@ -10,11 +11,15 @@ async function initialize(inputDir, outputPath) {
     const transactions = await assembleTransactions(inputDir)
     logger(`Found total of ${transactions.length} transactions`)
     
+    // Enrich transactions with payee and category
+    const enrichedTransactions = await enrichTransactions(transactions)
+    logger('Successfully enriched transactions with payee and category')
+
     // Save to CSV
-    await saveToCsv(transactions, outputPath)
+    await saveToCsv(enrichedTransactions, outputPath)
     logger('Successfully saved to CSV')
     
-    return transactions
+    return enrichedTransactions
   } catch (err) {
     console.error('Error in PDF to CSV conversion:', err)
     throw err

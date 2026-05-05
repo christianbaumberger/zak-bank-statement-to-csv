@@ -6,5 +6,8 @@ export const mockTransaction = {
   amount: '100.00',
   type: 'incoming',
   balance: '1000.00',
-  time: '12:00:00'
-} 
+  time: '12:00:00',
+  payee: 'Test Payee',
+  notes: '',
+  category: 'Test Category'
+}
