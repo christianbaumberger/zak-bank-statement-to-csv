@@ -38,6 +38,167 @@ function normalizeWhitespace(text) {
 }
 
 /**
+ * Normalize text for payee matching
+ * @param {string} text - Text to normalize
+ * @returns {string}
+ */
+function normalizeForMatching(text) {
+  return normalizeWhitespace(String(text))
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .toLowerCase()
+    .trim()
+}
+
+/**
+ * Escape a string for regular expression usage
+ * @param {string} value - Value to escape
+ * @returns {string}
+ */
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+/**
+ * Check if a normalized payee appears as a whole phrase in normalized text
+ * @param {string} normalizedText - Normalized text
+ * @param {string} normalizedPayee - Normalized payee
+ * @returns {boolean}
+ */
+function hasWholePhraseMatch(normalizedText, normalizedPayee) {
+  const regex = new RegExp(`(^| )${escapeRegExp(normalizedPayee)}(?= |$)`, 'i')
+  return regex.test(normalizedText)
+}
+
+/**
+ * Find the best exact payee match for normalized texts
+ * @param {string[]} normalizedTexts - Normalized text lines
+ * @param {string[]} sortedPayees - Payees sorted by specificity
+ * @param {number} minimumTokenCount - Minimum number of tokens in payee
+ * @returns {string|null}
+ */
+function findExactPayeeMatch(normalizedTexts, sortedPayees, minimumTokenCount = 1) {
+  for (const payee of sortedPayees) {
+    const normalizedPayee = normalizeForMatching(payee)
+
+    if (!normalizedPayee || normalizedPayee.split(' ').length < minimumTokenCount) {
+      continue
+    }
+
+    if (normalizedTexts.some(text => hasWholePhraseMatch(text, normalizedPayee))) {
+      return payee
+    }
+  }
+
+  return null
+}
+
+/**
+ * Try to match a truncated multi-word payee inside normalized text
+ * @param {string} normalizedText - Normalized text
+ * @param {string} normalizedPayee - Normalized payee
+ * @returns {{ exactCount: number, prefixCount: number, totalPrefixLength: number }|null}
+ */
+function getFuzzyMultiWordMatchScore(normalizedText, normalizedPayee) {
+  const payeeTokens = normalizedPayee.split(' ')
+  const textTokens = normalizedText.split(' ')
+
+  if (payeeTokens.length < 2 || textTokens.length < payeeTokens.length) {
+    return null
+  }
+
+  for (let startIndex = 0; startIndex <= textTokens.length - payeeTokens.length; startIndex += 1) {
+    let exactCount = 0
+    let prefixCount = 0
+    let totalPrefixLength = 0
+    let matches = true
+
+    for (let tokenIndex = 0; tokenIndex < payeeTokens.length; tokenIndex += 1) {
+      const payeeToken = payeeTokens[tokenIndex]
+      const textToken = textTokens[startIndex + tokenIndex]
+
+      if (textToken === payeeToken) {
+        exactCount += 1
+        totalPrefixLength += textToken.length
+        continue
+      }
+
+      if (textToken.length >= 4 && payeeToken.startsWith(textToken)) {
+        prefixCount += 1
+        totalPrefixLength += textToken.length
+        continue
+      }
+
+      matches = false
+      break
+    }
+
+    if (matches && prefixCount > 0) {
+      return { exactCount, prefixCount, totalPrefixLength }
+    }
+  }
+
+  return null
+}
+
+/**
+ * Find the best fuzzy multi-word payee match across normalized texts
+ * @param {string[]} normalizedTexts - Normalized text lines
+ * @param {string[]} sortedPayees - Payees sorted by specificity
+ * @returns {string|null}
+ */
+function findFuzzyMultiWordPayeeMatch(normalizedTexts, sortedPayees) {
+  const candidates = []
+
+  for (const payee of sortedPayees) {
+    const normalizedPayee = normalizeForMatching(payee)
+
+    if (normalizedPayee.split(' ').length < 2) {
+      continue
+    }
+
+    for (const text of normalizedTexts) {
+      const score = getFuzzyMultiWordMatchScore(text, normalizedPayee)
+
+      if (score) {
+        candidates.push({
+          payee,
+          ...score,
+          tokenCount: normalizedPayee.split(' ').length,
+          payeeLength: normalizedPayee.length
+        })
+      }
+    }
+  }
+
+  if (candidates.length === 0) {
+    return null
+  }
+
+  candidates.sort((left, right) => {
+    if (right.tokenCount !== left.tokenCount) return right.tokenCount - left.tokenCount
+    if (right.exactCount !== left.exactCount) return right.exactCount - left.exactCount
+    if (right.totalPrefixLength !== left.totalPrefixLength) return right.totalPrefixLength - left.totalPrefixLength
+    return right.payeeLength - left.payeeLength
+  })
+
+  const [bestCandidate, secondBestCandidate] = candidates
+
+  if (
+    secondBestCandidate
+    && bestCandidate.tokenCount === secondBestCandidate.tokenCount
+    && bestCandidate.exactCount === secondBestCandidate.exactCount
+    && bestCandidate.totalPrefixLength === secondBestCandidate.totalPrefixLength
+    && bestCandidate.payeeLength === secondBestCandidate.payeeLength
+  ) {
+    return null
+  }
+
+  return bestCandidate.payee
+}
+
+/**
  * Extract payee from title or description by matching against known payees
  * @param {string} title - Transaction title
  * @param {string|string[]} description - Transaction description (string or array)
@@ -54,28 +215,40 @@ function extractPayeeFromTransaction(title, description, mapping) {
   ]
     .filter(Boolean)
 
-  // Sort by length descending to match longer/more specific payees first
-  const sortedPayees = payeeList.sort((a, b) => b.length - a.length)
+  const normalizedTexts = allText.map(normalizeForMatching)
 
-  // First, try to find exact match in title or any description line
-  for (const text of allText) {
-    const textLower = normalizeWhitespace(text).toLowerCase()
-    for (const payee of sortedPayees) {
-      if (!payee) continue
-      // Look for payee as a whole word (with word boundaries or at start/end)
-      const payeeLower = payee.toLowerCase()
-      // Use word boundary approach: check if payee appears as separate word
-      const regex = new RegExp(`\\b${payeeLower}\\b`, 'i')
-      if (regex.test(textLower)) {
-        return payee
-      }
+  // Sort by length descending to match longer/more specific payees first
+  const sortedPayees = [...payeeList].sort((left, right) => {
+    const leftNormalized = normalizeForMatching(left)
+    const rightNormalized = normalizeForMatching(right)
+    const tokenDifference = rightNormalized.split(' ').length - leftNormalized.split(' ').length
+
+    if (tokenDifference !== 0) {
+      return tokenDifference
     }
+
+    return rightNormalized.length - leftNormalized.length
+  })
+
+  const exactMultiWordMatch = findExactPayeeMatch(normalizedTexts, sortedPayees, 2)
+  if (exactMultiWordMatch) {
+    return exactMultiWordMatch
+  }
+
+  const fuzzyMultiWordMatch = findFuzzyMultiWordPayeeMatch(normalizedTexts, sortedPayees)
+  if (fuzzyMultiWordMatch) {
+    return fuzzyMultiWordMatch
+  }
+
+  const exactMatch = findExactPayeeMatch(normalizedTexts, sortedPayees)
+  if (exactMatch) {
+    return exactMatch
   }
 
   // Fallback: substring match (less strict, for partial matches in specific fields)
-  const combinedSearch = normalizeWhitespace(allText.join(' ')).toLowerCase()
+  const combinedSearch = normalizeForMatching(allText.join(' '))
   for (const payee of sortedPayees) {
-    if (payee && combinedSearch.includes(payee.toLowerCase())) {
+    if (payee && combinedSearch.includes(normalizeForMatching(payee))) {
       return payee
     }
   }
@@ -97,17 +270,20 @@ function getCategoryForPayee(payee, mapping) {
 }
 
 /**
- * Build notes content for unmapped transactions
- * @param {string} category - Mapped category
+ * Build notes content from title and description
+ * @param {string} title - Transaction title
  * @param {string|string[]} description - Original transaction description
  * @returns {string}
  */
-function getNotesForTransaction(category, description) {
-  if (category) {
-    return ''
+function getNotesForTransaction(title, description) {
+  const titlePart = title || ''
+  const descriptionPart = formatDescription(description)
+
+  if (titlePart && descriptionPart) {
+    return `${titlePart}: ${descriptionPart}`
   }
 
-  return formatDescription(description)
+  return titlePart || descriptionPart
 }
 
 /**
@@ -124,7 +300,7 @@ export function enrichTransactionWithPayeeAndCategory(transaction, mapping) {
   )
 
   const category = getCategoryForPayee(payee, mapping)
-  const notes = getNotesForTransaction(category, transaction.description)
+  const notes = getNotesForTransaction(transaction.title, transaction.description)
 
   return {
     ...transaction,
