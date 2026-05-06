@@ -1,6 +1,7 @@
 // src/utils/payeeMapper.js
 import { promises as fs } from 'fs'
 import path from 'path'
+import { formatDescription } from './formatters.js'
 
 let payeeCategoryMapping = null
 
@@ -96,6 +97,20 @@ function getCategoryForPayee(payee, mapping) {
 }
 
 /**
+ * Build notes content for unmapped transactions
+ * @param {string} category - Mapped category
+ * @param {string|string[]} description - Original transaction description
+ * @returns {string}
+ */
+function getNotesForTransaction(category, description) {
+  if (category) {
+    return ''
+  }
+
+  return formatDescription(description)
+}
+
+/**
  * Main function to enrich transaction with payee and category
  * @param {Object} transaction - Transaction object with title and description
  * @param {Object} mapping - Payee-to-category mapping
@@ -109,12 +124,13 @@ export function enrichTransactionWithPayeeAndCategory(transaction, mapping) {
   )
 
   const category = getCategoryForPayee(payee, mapping)
+  const notes = getNotesForTransaction(category, transaction.description)
 
   return {
     ...transaction,
     payee: payee || '',
     category: category || '',
-    notes: ''
+    notes
   }
 }
 

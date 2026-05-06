@@ -21,7 +21,7 @@ describe('saveToCsv', () => {
     const transactions = [{
       ...mockTransaction,
       payee: 'Test Payee',
-      notes: '',
+      notes: 'Original unmatched description',
       category: 'Test Category'
     }]
     const outputPath = 'test.csv'
@@ -35,7 +35,7 @@ describe('saveToCsv', () => {
     expect(csvContent).toContain('date,payee,notes,category,incoming,outgoing')
 
     // Check data row (with proper CSV escaping)
-    const expectedRow = '"2023-12-31","Test Payee","","Test Category","100.00",""'
+    const expectedRow = '"2023-12-31","Test Payee","Original unmatched description","Test Category","100.00",""'
     expect(csvContent).toContain(expectedRow)
   })
 
