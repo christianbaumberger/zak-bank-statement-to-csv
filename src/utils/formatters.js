@@ -1,6 +1,7 @@
 /**
- * Formats a date string from dd.mm.yy to yyyy-mm-dd
- * @param {string} dateStr - Date string in format dd.mm.yy
+ * Formats a date string to yyyy-mm-dd format
+ * Accepts both dd.mm.yy (ZAK PDF format) and yyyy-mm-dd (Neon CSV format)
+ * @param {string} dateStr - Date string in format dd.mm.yy or yyyy-mm-dd
  * @returns {string} Date in format yyyy-mm-dd
  * @throws {Error} If date string is invalid
  */
@@ -9,6 +10,12 @@ export function formatDate(dateStr) {
     throw new Error('Invalid date string provided')
   }
 
+  // Check if already in yyyy-mm-dd format (Neon CSV format)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    return dateStr
+  }
+
+  // Parse dd.mm.yy format (ZAK PDF format)
   const parts = dateStr.split('.')
   if (parts.length !== 3) {
     throw new Error(`Invalid date format: ${dateStr}`)

@@ -35,6 +35,9 @@ const SKIP_WORDS = Object.freeze([
 ])
 
 const INCOMING_AMOUNT_X_THRESHOLD = 26
+// X coordinates for transaction amount columns in the PDF
+const OUTGOING_AMOUNT_X_RANGE = [20, 25]  // Belastung column
+const INCOMING_AMOUNT_X_RANGE = [27, 32]  // Gutschrift column
 
 /**
  * Creates an empty transaction object
@@ -149,11 +152,18 @@ export async function parsePdf(filePath) {
         // Amount or balance
         else if (isAmount(currentText) && currentTransaction) {          
           if (!currentTransaction.amount) {
-            currentTransaction.amount = currentText
-            // If amount is in Gutschrift column (around x=27-29), it's incoming
-            currentTransaction.type = (item.x > INCOMING_AMOUNT_X_THRESHOLD) ? 'incoming' : 'outgoing'
-            logger(`Added ${currentTransaction.type} amount:`, currentText, 'X:', item.x)
-          } else if (!currentTransaction.balance) {
+            // Check if this amount is in a valid transaction column (not in description text)
+            // Valid ranges: Belastung (outgoing) x: 20-25, Gutschrift (incoming) x: 27-32, Balance x: 33+
+            const isValidAmount = (item.x >= OUTGOING_AMOUNT_X_RANGE[0] && item.x <= OUTGOING_AMOUNT_X_RANGE[1]) ||
+                                  (item.x >= INCOMING_AMOUNT_X_RANGE[0] && item.x <= INCOMING_AMOUNT_X_RANGE[1])
+            if (isValidAmount) {
+              currentTransaction.amount = currentText
+              // If amount is in Gutschrift column (x: 27-32), it's incoming
+              currentTransaction.type = (item.x >= INCOMING_AMOUNT_X_RANGE[0]) ? 'incoming' : 'outgoing'
+              logger(`Added ${currentTransaction.type} amount:`, currentText, 'X:', item.x)
+            }
+          } else if (!currentTransaction.balance && item.x > 32) {
+            // Balance is in a column further to the right
             currentTransaction.balance = currentText
             // Only push transaction if it has a title (skip Saldovortrag)
             if (currentTransaction.title) {

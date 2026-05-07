@@ -21,44 +21,66 @@ jest.unstable_mockModule('../parsePdf.js', () => ({
   parsePdf: mockParsePdf
 }))
 
+const mockParseNeonCsv = jest.fn()
+jest.unstable_mockModule('../parseNeonCsv.js', () => ({
+  parseNeonCsv: mockParseNeonCsv
+}))
+
 const { assembleTransactions } = await import('../assembleTransactions.js')
+
+// Helper to create dirent-like objects
+function createDirent(name, isDir = false) {
+  return {
+    name,
+    isDirectory: () => isDir,
+    isFile: () => !isDir
+  }
+}
 
 describe('assembleTransactions', () => {
   beforeEach(() => {
     mockReaddir.mockClear()
     mockAccess.mockClear()
     mockParsePdf.mockClear()
-    
+    mockParseNeonCsv.mockClear()
+
     // Default successful responses
     mockAccess.mockResolvedValue(undefined)
-    mockReaddir.mockResolvedValue(['test1.pdf', 'test2.pdf', 'notapdf.txt'])
+    mockReaddir.mockResolvedValue([
+      createDirent('test1.pdf'),
+      createDirent('test2.pdf'),
+      createDirent('notapdf.txt')
+    ])
     mockParsePdf.mockResolvedValue([mockTransaction])
   })
 
-  it('should process PDF files and return sorted transactions', async() => {
-    const transactions = await assembleTransactions('input')
-    
-    expect(mockReaddir).toHaveBeenCalledWith('input')
+  it('should process PDF files and return one result per file', async() => {
+    const results = await assembleTransactions('input')
+
+    expect(mockReaddir).toHaveBeenCalledWith('input', { withFileTypes: true })
     expect(mockParsePdf).toHaveBeenCalledTimes(2)
-    expect(transactions).toHaveLength(2)
-    expect(transactions[0].date).toBe(mockTransaction.date)
+    expect(results).toHaveLength(2)
+    expect(results[0].name).toBe('test1.pdf')
+    expect(results[0].transactions).toHaveLength(1)
+    expect(results[0].transactions[0].date).toBe(mockTransaction.date)
+    expect(results[0].relativePath).toBe('test1.pdf')
   })
 
   it('should handle PDF processing errors', async() => {
     mockParsePdf.mockRejectedValue(new Error('PDF processing failed'))
-    mockReaddir.mockResolvedValue(['test1.pdf']) // Only one file to simplify test
+    mockReaddir.mockResolvedValue([createDirent('test1.pdf')]) // Only one file to simplify test
 
     await expect(assembleTransactions('input'))
       .rejects
       .toThrow('Failed to process transactions: No transactions were successfully processed')
   })
 
-  it('should throw error if no PDF files found', async() => {
-    mockReaddir.mockResolvedValue(['notapdf.txt'])
-    
+  it('should throw error if no PDF or CSV files found', async() => {
+    mockReaddir.mockResolvedValue([createDirent('notapdf.txt')])
+
     await expect(assembleTransactions('input'))
       .rejects
-      .toThrow('No PDF files found in input')
+      .toThrow('No PDF or CSV files found in input')
   })
 
   it('should throw error if directory does not exist', async() => {
