@@ -8,6 +8,10 @@ export function isAmount(text) {
   return /^\d+'?\d*\.\d{2}$/.test(text)
 }
 
+export function isNegativeAmount(text) {
+  return /^-\d+'?\d*\.\d{2}$/.test(text)
+}
+
 export function shouldSkipLine(text, skipWords) {
   return skipWords.some(word => text.includes(word))
 }

@@ -1,7 +1,7 @@
 // src/services/parsePdf.js
 import { promises as fs } from 'fs'
 import { PdfReader } from 'pdfreader'
-import { isDate, isAmount, shouldSkipLine } from '../utils/validators.js'
+import { isDate, isAmount, isNegativeAmount, shouldSkipLine } from '../utils/validators.js'
 import { logger } from '../utils/logger.js'
 
 /**
@@ -162,6 +162,14 @@ export async function parsePdf(filePath) {
             }
             currentTransaction = null
           }
+        }
+        // Negative split amount in balance column: close the current transaction without a balance
+        else if (isNegativeAmount(currentText) && currentTransaction?.amount && !currentTransaction.balance && item.x > 31) {
+          if (currentTransaction.title) {
+            transactions.push({...currentTransaction})
+            logger('Transaction completed (split):', currentTransaction)
+          }
+          currentTransaction = null
         }
         // Must be description text
         else if (currentTransaction) {
